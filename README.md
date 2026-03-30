@@ -1,150 +1,60 @@
-# ALU de 8 Bits — Digital Simulator
-
-> Unidade Lógica e Aritmética com seleção de operação por enable e decodificador 3:8
-
----
+# ALA de 8 Bits — Digital Simulator
+**Unidade Lógica e Aritmética com Seleção por Barramento Tri-state e Decodificador 3:8**
 
 ## 1. Visão Geral
-
-Este projeto implementa uma **Unidade Lógica e Aritmética (ALU) de 8 bits** no simulador [Digital](https://github.com/hneemann/Digital). A ALU executa 7 operações distintas sobre os operandos **AC** e **N**, com seleção via decodificador 3:8 e habilitação individual de cada bloco operacional (enable).
-
-O projeto é composto por subcircuitos independentes em formato `.dig`, integrados em um circuito principal que gerencia a seleção e a composição da saída final.
-
----
+Este projeto implementa uma Unidade Lógica e Aritmética (ULA) de 8 bits desenvolvida no simulador **Digital**. A principal característica desta arquitetura é o uso de um **Barramento de Dados Compartilhado**, onde a seleção da operação ativa é feita através de um decodificador que habilita **Drivers Tri-state** individuais, evitando conflitos elétricos e garantindo modularidade.
 
 ## 2. Operações Suportadas
+A ULA processa dois operandos de 8 bits (**AC** e **N**) e disponibiliza o resultado em um barramento comum.
 
-| Operação | Expressão | Entradas | Saídas |
-|---|---|---|---|
-| Soma | AC + N | AC, N (8b) | AC (8b) |
-| Subtração | AC − N | AC, N (8b) | AC (8b) |
-| Multiplicação | AC × N | AC, N (8b) | AC (8 LSB), MQ (8 MSB) |
-| Divisão | AC ÷ N | AC, N (8b) | AC (Resto), MQ (Quociente) |
-| Shift Lógico | shift(AC) | AC (8b) | AC (8b) |
-| NAND | AC NAND N | AC, N (8b) | AC (8b) |
-| XOR | AC XOR N | AC, N (8b) | AC (8b) |
-
-> **AC** = Acumulador (registrador principal de 8 bits)  
-> **MQ** = Registrador auxiliar de 8 bits (usado em multiplicação e divisão)
-
----
+| Opcode | Operação | Expressão | Descrição |
+| :--- | :--- | :--- | :--- |
+| `000` | **Soma** | $AC + N$ | Soma aritmética de 8 bits. |
+| `001` | **Subtração** | $AC - N$ | Subtração via complemento de 2 (Somador com $Cin=1$ e $N$ invertido). |
+| `010` | **Divisão** | $AC \div N$ | Quociente de 8 bits (Saída Q do divisor combinacional). |
+| `011` | **NAND** | $AC \text{ NAND } N$ | Operação lógica bit a bit. |
+| `100` | **XOR** | $AC \text{ XOR } N$ | Operação lógica bit a bit (OU Exclusivo). |
+| `101` | **Shift Left** | $AC \ll 1$ | Deslocamento lógico para a esquerda (multiplicação por 2). |
 
 ## 3. Arquitetura do Circuito
 
-### 3.1 Entradas Globais
+### 3.1 Seleção de Operação (Opcode)
+A escolha da função é feita por uma entrada de **3 bits**, conectada a um **Decodificador 3:8**. Este componente garante que apenas uma linha de controle (*Enable*) esteja ativa por vez, traduzindo o endereço binário em um sinal físico para o Driver correspondente.
 
-| Sinal | Largura | Descrição |
-|---|---|---|
-| `AC[7..0]` | 8 bits | Acumulador — operando principal |
-| `N[7..0]` | 8 bits | Segundo operando |
-| `S[2..0]` | 3 bits | Código de seleção da operação |
+### 3.2 Barramento Tri-state (Drivers)
+Em vez de um Multiplexador (MUX) tradicional, utilizamos **Drivers Tri-state de 8 bits**. 
+* Cada bloco operacional tem sua saída conectada a um Driver dedicado.
+* O pino de controle (*Enable*) do Driver é ligado à saída correspondente do decodificador.
+* Quando um bloco não está selecionado, sua saída entra em **Alta Impedância (Z)**, permitindo que múltiplos circuitos compartilhem o mesmo barramento sem causar curto-circuito (fio vermelho).
 
-### 3.2 Decodificador 3:8
+### 3.3 Entradas Compartilhadas
+As entradas **AC** (Acumulador) e **N** são distribuídas para todos os blocos operacionais simultaneamente através de **Tunnels** (Túneis). Isso reduz a poluição visual do diagrama e simula o comportamento de um barramento de endereços/dados real.
 
-Os 3 bits de seleção ativam exatamente **um** sinal de enable por vez:
+## 4. Detalhes dos Subcircuitos
 
-| S2 | S1 | S0 | Enable | Operação |
-|---|---|---|---|---|
-| 0 | 0 | 0 | EN0 | Soma |
-| 0 | 0 | 1 | EN1 | Subtração |
-| 0 | 1 | 0 | EN2 | Multiplicação |
-| 0 | 1 | 1 | EN3 | Divisão |
-| 1 | 0 | 0 | EN4 | Shift Lógico |
-| 1 | 0 | 1 | EN5 | NAND |
-| 1 | 1 | 0 | EN6 | XOR |
-| 1 | 1 | 1 | — | *(reservado)* |
+### 4.1 Divisor Combinacional (8 bits)
+Utiliza uma estrutura de estágios em cascata (escada) para suportar a divisão de números de 8 bits.
+* **Entrada:** Dividendo (AC) e Divisor (N).
+* **Saída Q:** Quociente (encaminhado ao barramento via Driver).
+* **Saída R:** Resto (visualizado de forma independente para depuração).
 
-No Digital: **Componentes → Plexers → Decoder** (3 entradas, 8 saídas).
+### 4.2 Shift Lógico (Esquerda)
+Implementado via **Splitters**, realizando o deslocamento físico dos fios:
+* O bit $A_n$ é mapeado para a posição $n+1$.
+* O bit 0 recebe uma constante lógica `0`.
+* O bit 7 (MSB) é extraído como **Cout** (Carry Out).
 
-### 3.3 Blocos Operacionais com Enable
+## 5. Como Utilizar
+1. Abra o arquivo principal `ALU-completa.dig` no simulador Digital.
+2. Certifique-se de que todos os subcircuitos (`.dig`) estejam na mesma pasta.
+3. Configure os valores de entrada nos componentes **AC** e **N** (8 bits).
+4. Altere o seletor de **Opcode** (3 bits) para observar a mudança de resultado no barramento.
+5. O resultado final pode ser lido no **Hex Display** ou através de uma **Probe** decimal.
 
-Cada operação reside em um subcircuito `.dig` separado. Todos os blocos recebem `AC`, `N` e um pino `EN`. Quando `EN = 0`, a saída é mascarada para `00000000` via portas AND de 8 bits:
-
-```
-AC, N ──► [ Lógica da operação ] ──► resultado[7..0]
-                                            │
-EN    ──► [ Replicator 1→8 ]    ──► [ AND 8b ] ──► saída[7..0]
-```
-
-> O componente **Replicator** (Componentes → Wiring) expande EN de 1 bit para 8 bits, permitindo o AND bit a bit com o resultado.
-
-### 3.4 Composição da Saída
-
-Como apenas um EN está ativo por vez, todas as saídas de 8 bits são combinadas por uma **porta OR de 8 bits com 7 entradas**. O resultado é encaminhado para:
-
-- **AC** — soma, subtração, shift, NAND, XOR, resto da divisão, 8 LSB da multiplicação
-- **MQ** — 8 MSB da multiplicação, quociente da divisão
+## 6. Decisões de Projeto
+* **Modularidade:** Cada operação é um subcircuito independente, facilitando a manutenção.
+* **Fidelidade à Hardware Real:** O uso de Drivers Tri-state e Decodificadores aproxima o projeto da arquitetura interna de processadores comerciais (como o 8085 ou 6502).
+* **Escalabilidade:** Para adicionar uma 7ª ou 8ª operação, basta conectar o novo bloco a um novo Driver e utilizar as saídas 6 ou 7 do decodificador que já estão disponíveis.
 
 ---
-
-## 4. Subcircuitos
-
-### 4.1 `divisor-4bits.dig`
-
-Implementa o algoritmo de **divisão por restauração**, expandido de 3 para **4 bits no dividendo**:
-
-- **Dividendo:** 4 bits (AC)
-- **Divisor:** 3 bits (N)
-- **4 estágios** de processamento, cada um com 4 PUs (Processing Units)
-- **Saídas:** `R_F` (Resto Final) → AC · `Q0, Q1, Q2` (Quociente) → MQ
-
-A expansão de 3 para 4 bits foi feita por edição direta do XML do arquivo `.dig`:
-
-1. Cópia do Stage 2 com deslocamento **+480 unidades** no eixo Y
-2. Replicação de todos os wires internos do Stage 2 para o Stage 3
-3. Extensão dos barramentos verticais (`x = 1480, 1520, 1560`) até o novo estágio
-4. Adição dos wires de conexão Stage 2 → Stage 3 (espelhando o padrão Stage 1 → Stage 2)
-5. Remoção de wires duplicados gerados pela cópia
-
-### 4.2 Demais Subcircuitos
-
-Os blocos de soma, subtração, multiplicação, shift, NAND e XOR devem seguir o mesmo padrão de interface:
-
-- **Entradas:** `AC[7..0]`, `N[7..0]`, `EN`
-- **Saída:** `resultado[7..0]` (mascarado por AND quando `EN = 0`)
-
-Blocos já existentes podem ser adaptados adicionando a porta AND de mascaramento e o Replicator do sinal EN.
-
----
-
-## 5. Como Usar no Digital
-
-1. Abra o arquivo principal `ula_8bits.dig` no Digital
-2. Certifique-se de que todos os subcircuitos `.dig` estejam na **mesma pasta**
-3. Configure `AC[7..0]` e `N[7..0]` com os operandos desejados
-4. Configure `S[2..0]` conforme a tabela de seleção (Seção 3.2)
-5. Leia o resultado em **AC** e, se necessário, em **MQ**
-
----
-
-## 6. Estrutura de Arquivos
-
-```
-projeto/
-├── ula_8bits.dig          # Circuito principal (a criar)
-├── divisor-4bits.dig      # Bloco de divisão (4 bits) ✅
-├── soma.dig               # Bloco de soma (a adaptar)
-├── subtracao.dig          # Bloco de subtração (a adaptar)
-├── multiplicacao.dig      # Bloco de multiplicação (a adaptar)
-├── shift.dig              # Bloco de shift lógico (a adaptar)
-├── nand.dig               # Bloco NAND (a adaptar)
-├── xor.dig                # Bloco XOR (a adaptar)
-└── README.md              # Este documento
-```
-
----
-
-## 7. Decisões de Projeto
-
-**Por que enable em vez de MUX?**  
-A abordagem com enable e OR final é mais modular: cada bloco é independente e pode ser desenvolvido, testado e substituído sem alterar o circuito principal. Um MUX exigiria ajustar a largura do barramento de entrada sempre que uma operação fosse adicionada.
-
-**Por que 3 bits de seleção e não 7 chaves?**  
-Três bits permitem selecionar até 8 operações com apenas 3 entradas, reduzindo o número de pinos no circuito principal. O decodificador 3:8 é um componente nativo do Digital.
-
-**Por que o divisor usa 4 bits no dividendo e 3 no divisor?**  
-A estrutura original do circuito possuía 3 estágios com 4 PUs cada, operando sobre um divisor de 3 bits. Adicionar um quarto estágio estendeu o dividendo para 4 bits mantendo a largura do divisor. Para um divisor de 4 bits seria necessário adicionar um quinto PU por estágio — uma mudança estrutural maior.
-
----
-
-*Projeto ULA 8 bits — Digital Simulator*
+*Projeto desenvolvido por Arielly Lima - 2026*
