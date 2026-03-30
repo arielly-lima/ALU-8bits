@@ -1,4 +1,4 @@
-# ALA de 8 Bits — Digital Simulator
+# ALU de 8 Bits — Digital Simulator
 **Unidade Lógica e Aritmética com Seleção por Barramento Tri-state e Decodificador 3:8**
 
 ## 1. Visão Geral
