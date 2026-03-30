@@ -57,4 +57,4 @@ Implementado via **Splitters**, realizando o deslocamento físico dos fios:
 * **Escalabilidade:** Para adicionar uma 7ª ou 8ª operação, basta conectar o novo bloco a um novo Driver e utilizar as saídas 6 ou 7 do decodificador que já estão disponíveis.
 
 ---
-*Projeto desenvolvido por Arielly Lima - 2026*
+*Projeto desenvolvido por Maria Arielly Lima - 2026*
