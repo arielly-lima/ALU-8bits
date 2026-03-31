@@ -1,6 +1,8 @@
 # ALU de 8 Bits — Digital Simulator
 **Unidade Lógica e Aritmética com Seleção por Barramento Tri-state e Decodificador 3:8**
 
+**Link para o vídeo de explicação:** https://youtu.be/K0H2M3pCGIs
+
 ## 1. Visão Geral
 Este projeto implementa uma Unidade Lógica e Aritmética (ULA) de 8 bits desenvolvida no simulador **Digital**. A principal característica desta arquitetura é o uso de um **Barramento de Dados Compartilhado**, onde a seleção da operação ativa é feita através de um decodificador que habilita **Drivers Tri-state** individuais, evitando conflitos elétricos e garantindo modularidade.
 
